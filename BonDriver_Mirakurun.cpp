@@ -1,6 +1,7 @@
 ﻿#include "BonDriver_Mirakurun.h"
 
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "json-c.lib")
 
 #define BITRATE_CALC_TIME	500		//ms
 
@@ -255,6 +256,12 @@ const BOOL CBonTuner::OpenTuner()
 						::OutputDebugString(szDebugOut);
 						throw 1UL;
 					}
+					GetChannelJSON("GR", &g_Channel_JSON_GR);
+					GetChannelJSON("BS", &g_Channel_JSON_BS);
+					GetChannelJSON("CS", &g_Channel_JSON_CS);
+					TCHAR szDebugOut[128];
+					::wsprintf(szDebugOut, TEXT("Point:%p,%p,%p\n"), &g_Channel_JSON_BS,&g_Channel_JSON_CS,&g_Channel_JSON_GR);
+					::OutputDebugString(szDebugOut);
 					m_bTunerOpen = true;
 					return TRUE;
 
@@ -278,7 +285,9 @@ const BOOL CBonTuner::OpenTuner()
 			return FALSE;
 
 		}
-
+		GetChannelJSON("GR", &g_Channel_JSON_GR);
+		GetChannelJSON("BS", &g_Channel_JSON_BS);
+		GetChannelJSON("CS", &g_Channel_JSON_CS);
 		m_bTunerOpen = true;
 	}
 
@@ -497,18 +506,39 @@ LPCTSTR CBonTuner::EnumTuningSpace(const DWORD dwSpace)
 
 LPCTSTR CBonTuner::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel)
 {
-	// 使用可能なチャンネルを返す
-	wchar_t space[32];
-	wsprintf(space, L"SPACE_%s", CBonTuner::EnumTuningSpace(dwSpace));
-
-	if (dwChannel >= GetPrivateProfileInt(space, L"CHANNEL_NUM", 0, g_IniFilePath )) {
+	json_object *Channel_JSON;
+	switch (dwSpace) {
+	case 0UL:
+		Channel_JSON = g_Channel_JSON_GR;
+		break;
+	case 1UL:
+		Channel_JSON = g_Channel_JSON_BS;
+		break;
+	case 2UL:
+		Channel_JSON = g_Channel_JSON_CS;
+		break;
+	default:
 		return NULL;
 	}
 
-	static TCHAR buf[128];
-	TCHAR channel[128];
-	wsprintf(channel, L"NAME_%02d", dwChannel);
-	GetPrivateProfileString(space, channel, L"Unknown", buf, sizeof(buf), g_IniFilePath);
+	if (Channel_JSON == NULL || dwChannel >= json_object_array_length(Channel_JSON)) {
+		return NULL;
+	}
+	json_object *tmp = json_object_array_get_idx(Channel_JSON, dwChannel);
+	json_object_object_foreach(tmp, key, val) {
+		TCHAR szDebugOut[4096];
+		wchar_t wcs_val[64] = {};
+
+
+		::MultiByteToWideChar(CP_UTF8, 0, json_object_get_string(val), -1, wcs_val, 64);
+		if (strcmpi("name", key) == 0) {
+			TCHAR buf[128];
+			wsprintf(buf, wcs_val);
+			return buf;
+		}
+	}
+	TCHAR buf[128];
+	wsprintf(buf, TEXT("Unknown"));
 	return buf;
 }
 
@@ -718,13 +748,43 @@ const BOOL CBonTuner::SetChannel(const BYTE bCh)
 // チャンネル設定
 const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 {
-	// 使用可能なチャンネルを返す
-	wchar_t space[32];
-	wsprintf(space, L"SPACE_%s", CBonTuner::EnumTuningSpace(dwSpace));
+	json_object *Channel_JSON;
+	wchar_t *channel;
+	switch (dwSpace) {
+	case 0UL:
+		Channel_JSON = g_Channel_JSON_GR;
+		break;
+	case 1UL:
+		Channel_JSON = g_Channel_JSON_BS;
+		break;
+	case 2UL:
+		Channel_JSON = g_Channel_JSON_CS;
+		break;
+	default:
+		return NULL;
+}
 
-	if (dwChannel >= GetPrivateProfileInt(space, L"CHANNEL_NUM", 0, g_IniFilePath)) {
+	if (Channel_JSON == NULL || dwChannel >= json_object_array_length(Channel_JSON)) {
 		return NULL;
 	}
+	json_object *tmp = json_object_array_get_idx(Channel_JSON, dwChannel);
+	json_object_object_foreach(tmp, key, val) {
+
+
+
+		if (strcmpi("channel", key) == 0) {
+			wchar_t wcs_val[64] = { 0 };
+			::MultiByteToWideChar(CP_UTF8, 0, json_object_get_string(val), -1, wcs_val, 64);
+			TCHAR szDebugOut[128];
+			::wsprintf(szDebugOut, TEXT("wcs:%s\n"), wcs_val);
+			::OutputDebugString(szDebugOut);
+			channel = wcs_val;
+
+		}
+	}
+	TCHAR szDebugOut[128];
+	::wsprintf(szDebugOut, TEXT("chan:%s\n"), channel);
+	::OutputDebugString(szDebugOut);
 
 	// 一旦クローズ
 	CloseTuner();
@@ -742,7 +802,6 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 	m_dwReadyReqNum = 0;
 
 	try{
-		wchar_t channel[16];
 		char serverRequest[256];
 
 		// tmp
@@ -751,8 +810,6 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 
 		WCHAR tmpServerRequest[256];
 
-		wsprintf(tmpString, L"CHANNEL_%02d", dwChannel);
-		GetPrivateProfileString(space, tmpString, L"0", channel, sizeof(channel), g_IniFilePath);
 
 		// URL生成
 		wsprintf(tmpUrl, L"/api/channels/%s/%s/stream?decode=%d", CBonTuner::EnumTuningSpace(dwSpace), channel, g_DecodeB25);
@@ -883,4 +940,98 @@ void CBonTuner::CalcBitRate()
 		m_dwLastCalcTick = dwCurrentTick;
 	}
 	return;
+}
+
+void CBonTuner::GetChannelJSON(const char* space,json_object** json)
+{
+	json_object *tmp_json;
+	try {
+		wchar_t channel[16];
+		wchar_t w_space[8];
+		char serverRequest[256];
+
+
+		WCHAR tmpServerRequest[256];
+
+		mbstowcs(w_space, space, 8);
+
+		wsprintf(tmpServerRequest, L"GET /api/channels/%s HTTP/1.0\r\n\r\n", w_space);
+		OutputDebugString(tmpServerRequest);
+		size_t i;
+		wcstombs_s(&i, serverRequest, tmpServerRequest, sizeof(serverRequest));
+
+		struct addrinfo hints;
+		struct addrinfo* res = NULL;
+		struct addrinfo* ai;
+
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_INET6;	//IPv6優先
+		hints.ai_socktype = SOCK_STREAM;
+		hints.ai_protocol = IPPROTO_TCP;
+		hints.ai_flags = AI_NUMERICSERV;
+		if (getaddrinfo(g_ServerHost, g_ServerPort, &hints, &res) != 0) {
+			//printf("getaddrinfo(): %s\n", gai_strerror(err));
+			hints.ai_family = AF_INET;	//IPv4限定
+			if (getaddrinfo(g_ServerHost, g_ServerPort, &hints, &res) != 0) {
+				throw 1UL;
+			}
+		}
+
+		for (ai = res; ai; ai = ai->ai_next) {
+			m_sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+			if (m_sock == INVALID_SOCKET) {
+				continue;
+			}
+
+			if (connect(m_sock, ai->ai_addr, ai->ai_addrlen) >= 0) {
+				// OK
+				break;
+			}
+			closesocket(m_sock);
+			m_sock = INVALID_SOCKET;
+		}
+		freeaddrinfo(res);
+
+		if (m_sock == INVALID_SOCKET) {
+			TCHAR szDebugOut[128];
+			::wsprintf(szDebugOut, TEXT("%s: CBonTuner::OpenTuner() connection error %d\n"), TUNER_NAME, WSAGetLastError());
+			::OutputDebugString(szDebugOut);
+			throw 1UL;
+		}
+
+		if (send(m_sock, serverRequest, (int)strlen(serverRequest), 0) < 0) {
+			TCHAR szDebugOut[128];
+			::wsprintf(szDebugOut, TEXT("%s: CBonTuner::OpenTuner() send error %d\n"), TUNER_NAME, WSAGetLastError());
+			::OutputDebugString(szDebugOut);
+			throw 1UL;
+		}
+		char buf[16384];
+		int buf_pos = 0;
+		int recvd = 0;
+		char tmp[2048];
+		memset(buf, 0, sizeof(buf));
+		memset(tmp, 0, sizeof(tmp));
+		while ((recvd = recv(m_sock, tmp, sizeof(tmp), 0)) > 0) {
+			if (buf_pos + recvd > sizeof(buf))
+				break;
+			memcpy(&buf[buf_pos], tmp, recvd);
+			buf_pos += recvd;
+		}
+		char* pdata = strstr((char*)buf, "\r\n\r\n");
+		pdata += 4;
+
+		tmp_json = json_tokener_parse(pdata);
+
+	}
+	catch (const DWORD dwErrorStep) {
+		// エラー発生
+		TCHAR szDebugOut[1024];
+		::wsprintf(szDebugOut, TEXT("%s: CBonTuner::OpenTuner() dwErrorStep = %lu\n"), TUNER_NAME, dwErrorStep);
+		::OutputDebugString(szDebugOut);
+
+		//return FALSE;
+	}
+	if (json_object_get_type(tmp_json) == json_type_array) {
+		*json = tmp_json;
+	}
 }

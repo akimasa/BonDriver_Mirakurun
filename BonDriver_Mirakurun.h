@@ -2,6 +2,7 @@
 #include <ws2tcpip.h>
 #include <InitGuid.h>
 #include "IBonDriver2.h"
+#include "json-c\json.h"
 
 #if !defined(_BONTUNER_H_)
 #define _BONTUNER_H_
@@ -28,6 +29,9 @@ static int g_DecodeB25;
 static int g_MagicPacket_Enable;
 static char g_MagicPacket_TargetMAC[18];
 static char g_MagicPacket_TargetIP[16];
+json_object *g_Channel_JSON_GR;
+json_object *g_Channel_JSON_BS;
+json_object *g_Channel_JSON_CS;
 
 class CBonTuner : public IBonDriver2
 {
@@ -125,7 +129,8 @@ protected:
 	ULONGLONG m_u64RecvBytes;
 	ULONGLONG m_u64LastCalcByte;
 
-
+private:
+	void GetChannelJSON(const char * space, json_object ** json);
 };
 
 #endif // !defined(_BONTUNER_H_)

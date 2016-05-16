@@ -1,0 +1,3 @@
+[submodule "json-c"]
+	path = json-c
+	url = https://github.com/akimasa/json-c
