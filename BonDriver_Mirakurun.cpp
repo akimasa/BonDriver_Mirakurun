@@ -50,6 +50,7 @@ static int Init(HMODULE hModule)
 	wcstombs_s(&ret, g_ServerPort, tmpServerPort, sizeof(g_ServerPort));
 
 	g_DecodeB25 = GetPrivateProfileInt(L"GLOBAL", L"DECODE_B25", 0, g_IniFilePath);
+	g_Priority = GetPrivateProfileInt(L"GLOBAL", L"PRIORITY", 0, g_IniFilePath);
 
 	g_MagicPacket_Enable = GetPrivateProfileInt(L"GLOBAL", L"MAGICPACKET_ENABLE", 0, g_IniFilePath);
 
@@ -814,7 +815,7 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 		// URL生成
 		wsprintf(tmpUrl, L"/api/channels/%s/%s/stream?decode=%d", CBonTuner::EnumTuningSpace(dwSpace), channel, g_DecodeB25);
 
-		wsprintf(tmpServerRequest, L"GET %s HTTP/1.0\r\n\r\n", tmpUrl);
+		wsprintf(tmpServerRequest, L"GET %s HTTP/1.0\r\nX-Mirakurun-Priority: %d\r\n\r\n", tmpUrl, g_Priority);
 
 		size_t i;
 		wcstombs_s(&i, serverRequest, tmpServerRequest, sizeof(serverRequest));
