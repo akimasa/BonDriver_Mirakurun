@@ -533,12 +533,10 @@ LPCTSTR CBonTuner::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel)
 
 		::MultiByteToWideChar(CP_UTF8, 0, json_object_get_string(val), -1, wcs_val, 64);
 		if (strcmpi("name", key) == 0) {
-			TCHAR buf[128];
-			wsprintf(buf, wcs_val);
-			return buf;
+			return wcs_val;
 		}
 	}
-	TCHAR buf[128];
+	WCHAR buf[128];
 	wsprintf(buf, TEXT("Unknown"));
 	return buf;
 }
