@@ -50,6 +50,7 @@ static int Init(HMODULE hModule)
 
 	g_DecodeB25 = GetPrivateProfileInt(L"GLOBAL", L"DECODE_B25", 0, g_IniFilePath);
 	g_Priority = GetPrivateProfileInt(L"GLOBAL", L"PRIORITY", 0, g_IniFilePath);
+	g_service_per_Channel = GetPrivateProfileInt(L"GLOBAL", L"SERVICE_PER_CHANNEL", 0, g_IniFilePath);
 
 	setlocale(LC_ALL, "japanese");
 
@@ -284,12 +285,18 @@ const BOOL CBonTuner::OpenTuner()
 		}
 
 		m_bTunerOpen = true;
+		if (g_service_per_Channel == 1) {
+			GetApiChannels("GR", &g_Channel_JSON_GR);
+		}
+		else {
+			// Mirakurun APIよりchannel取得
+			GetApiChannels("GR", &g_Channel_JSON_GR);
+			GetApiChannels("BS", &g_Channel_JSON_BS);
+			GetApiChannels("CS", &g_Channel_JSON_CS);
+			GetApiChannels("SKY", &g_Channel_JSON_SKY);
+		}
 
-		// Mirakurun APIよりchannel取得
-		GetApiChannels("GR", &g_Channel_JSON_GR);
-		GetApiChannels("BS", &g_Channel_JSON_BS);
-		GetApiChannels("CS", &g_Channel_JSON_CS);
-		GetApiChannels("SKY", &g_Channel_JSON_SKY);
+
 	}
 
 	//return SetChannel(0UL,0UL);
@@ -511,19 +518,30 @@ LPCTSTR CBonTuner::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel)
 {
 	picojson::value channel_json;
 	LPCTSTR space_str = CBonTuner::EnumTuningSpace(dwSpace);
-
-	if (space_str == L"GR") {
-		channel_json = g_Channel_JSON_GR;
-	} else if (space_str == L"BS") {
-		channel_json = g_Channel_JSON_BS;
-	} else if (space_str == L"CS") {
-		channel_json = g_Channel_JSON_CS;
-	} else if (space_str == L"SKY") {
-		channel_json = g_Channel_JSON_SKY;
-	} else {
-		return NULL;
+	if (g_service_per_Channel == 1) {
+		if (space_str == L"GR") {
+			channel_json = g_Channel_JSON_GR;
+		} else {
+			return NULL;
+		}
 	}
-
+	else {
+		if (space_str == L"GR") {
+			channel_json = g_Channel_JSON_GR;
+		}
+		else if (space_str == L"BS") {
+			channel_json = g_Channel_JSON_BS;
+		}
+		else if (space_str == L"CS") {
+			channel_json = g_Channel_JSON_CS;
+		}
+		else if (space_str == L"SKY") {
+			channel_json = g_Channel_JSON_SKY;
+		}
+		else {
+			return NULL;
+		}
+	}
 	if (channel_json.is<picojson::array>() == false
 		|| channel_json.get<picojson::array>().empty()
 		|| channel_json.contains(dwChannel) == false) {
@@ -534,7 +552,7 @@ LPCTSTR CBonTuner::EnumChannelName(const DWORD dwSpace, const DWORD dwChannel)
 	std::string channel_name = channel_obj["name"].get<std::string>();
 
 	static TCHAR buf[128];
-	mbstowcs(buf, channel_name.c_str(), sizeof(buf));
+	::MultiByteToWideChar(CP_UTF8, 0, channel_name.c_str(), -1, buf, sizeof(buf) / 2);
 
 	return buf;
 }
@@ -747,35 +765,62 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 {
 	picojson::value channel_json;
 	LPCTSTR space_str = CBonTuner::EnumTuningSpace(dwSpace);
-
-	if (space_str == L"GR") {
-		channel_json = g_Channel_JSON_GR;
-	}
-	else if (space_str == L"BS") {
-		channel_json = g_Channel_JSON_BS;
-	}
-	else if (space_str == L"CS") {
-		channel_json = g_Channel_JSON_CS;
-	}
-	else if (space_str == L"SKY") {
-		channel_json = g_Channel_JSON_SKY;
-	}
-	else {
-		return NULL;
-	}
+	std::string channel_name = "";
+	std::string channel = "";
+	std::string type = "";
+	std::string service = "";
 
 	if (channel_json.is<picojson::array>() == false
 		|| channel_json.get<picojson::array>().empty()
 		|| channel_json.contains(dwChannel) == false) {
 		return NULL;
 	}
-
 	picojson::object& channel_obj = channel_json.get(dwChannel).get<picojson::object>();
-	std::string channel_name = channel_obj["name"].get<std::string>();
-	std::string channel = channel_obj["channel"].get<std::string>();
+
+	if (g_service_per_Channel == 1) {
+		if (space_str == L"GR") {
+			channel_json = g_Channel_JSON_GR;
+		}
+		else {
+			return NULL;
+		}
+		picojson::object& channel_detail = channel_obj["channel"].get<picojson::object>();
+		channel_name = channel_obj["name"].get<std::string>();
+
+		channel = channel_detail["channel"].get<std::string>();
+		type = channel_detail["type"].get<std::string>();
+		double service_double = channel_obj["serviceId"].get<double>();
+		service = std::to_string(service_double);
+		
+	}
+	else {
+		if (space_str == L"GR") {
+			channel_json = g_Channel_JSON_GR;
+		}
+		else if (space_str == L"BS") {
+			channel_json = g_Channel_JSON_BS;
+		}
+		else if (space_str == L"CS") {
+			channel_json = g_Channel_JSON_CS;
+		}
+		else if (space_str == L"SKY") {
+			channel_json = g_Channel_JSON_SKY;
+		}
+		else {
+			return NULL;
+		}
+		channel_obj = channel_json.get(dwChannel).get<picojson::object>();
+		channel_name = channel_obj["name"].get<std::string>();
+		channel = channel_obj["channel"].get<std::string>();
+	}
+
 
 	wchar_t wChannel[16];
 	mbstowcs(wChannel, channel.c_str(), sizeof(wChannel));
+	wchar_t wType[16];
+	mbstowcs(wType, type.c_str(), sizeof(wType));
+	wchar_t wService[16];
+	mbstowcs(wService, service.c_str(), sizeof(wService));
 
 	// 一旦クローズ
 	CloseTuner();
@@ -802,8 +847,14 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 		WCHAR tmpServerRequest[256];
 
 		// URL生成
-		wsprintf(tmpUrl, L"/api/channels/%s/%s/stream?decode=%d", CBonTuner::EnumTuningSpace(dwSpace), wChannel, g_DecodeB25);
+		if (g_service_per_Channel == 1) {
+			wsprintf(tmpUrl, L"/api/channels/%s/%s/services/%s/stream?decode=%d", wType, wChannel, wService, g_DecodeB25);
+		}
+		else {
+			wsprintf(tmpUrl, L"/api/channels/%s/%s/stream?decode=%d", CBonTuner::EnumTuningSpace(dwSpace), wChannel, g_DecodeB25);
+		}
 
+		OutputDebugString(tmpUrl);
 		wsprintf(tmpServerRequest, L"GET %s HTTP/1.0\r\nX-Mirakurun-Priority: %d\r\n\r\n", tmpUrl, g_Priority);
 
 		size_t i;
@@ -936,7 +987,13 @@ void CBonTuner::GetApiChannels(const char* space, picojson::value* channel_json)
 {
 	HttpClient client;
 	char url[512];
-	sprintf(url, "http://%s:%s/api/channels/%s", g_ServerHost, g_ServerPort, space);
+	if (g_service_per_Channel == 1) {
+		sprintf(url, "http://%s:%s/api/services", g_ServerHost, g_ServerPort);
+	}
+	else {
+		sprintf(url, "http://%s:%s/api/channels/%s", g_ServerHost, g_ServerPort, space);
+
+	}
 	HttpResponse response = client.get(url);
 
 	picojson::value v;

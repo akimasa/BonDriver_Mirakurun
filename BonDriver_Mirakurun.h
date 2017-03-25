@@ -39,6 +39,7 @@ static int g_MagicPacket_Enable;
 static char g_MagicPacket_TargetMAC[18];
 static char g_MagicPacket_TargetIP[16];
 #define MAGICPACKET_WAIT_SECONDS 20
+static int g_service_per_Channel;
 
 class CBonTuner : public IBonDriver2
 {
