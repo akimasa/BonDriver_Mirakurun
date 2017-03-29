@@ -48,6 +48,8 @@ static int Init(HMODULE hModule)
 	GetPrivateProfileString(L"GLOBAL", L"SERVER_PORT", L"8888", tmpServerPort, sizeof(tmpServerPort), g_IniFilePath);
 	wcstombs_s(&ret, g_ServerPort, tmpServerPort, sizeof(g_ServerPort));
 
+	GetPrivateProfileString(L"GLOBAL", L"DELETE_PIDS", L"", g_DeletePids, sizeof(g_DeletePids), g_IniFilePath);
+
 	g_DecodeB25 = GetPrivateProfileInt(L"GLOBAL", L"DECODE_B25", 0, g_IniFilePath);
 	g_Priority = GetPrivateProfileInt(L"GLOBAL", L"PRIORITY", 0, g_IniFilePath);
 	g_Service_Split = GetPrivateProfileInt(L"GLOBAL", L"SERVICE_SPLIT", 0, g_IniFilePath);
@@ -821,11 +823,11 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 	m_dwReadyReqNum = 0;
 
 	try{
-		char serverRequest[256];
+		char serverRequest[512];
 
 		// tmp
 		wchar_t tmpUrl[128];
-		WCHAR tmpServerRequest[256];
+		WCHAR tmpServerRequest[512];
 
 		// URL生成
 		if (g_Service_Split == 1) {
@@ -834,7 +836,7 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 		else {
 			wsprintf(tmpUrl, L"/api/channels/%s/%s/stream?decode=%d", CBonTuner::EnumTuningSpace(dwSpace), wChannel, g_DecodeB25);
 		}
-		wsprintf(tmpServerRequest, L"GET %s HTTP/1.0\r\nX-Mirakurun-Priority: %d\r\n\r\n", tmpUrl, g_Priority);
+		wsprintf(tmpServerRequest, L"GET %s HTTP/1.0\r\nX-Mirakurun-Priority: %d\r\nX-Mirakurun-Delete-Pids: %s\r\n\r\n", tmpUrl, g_Priority, g_DeletePids);
 
 		size_t i;
 		wcstombs_s(&i, serverRequest, tmpServerRequest, sizeof(serverRequest));

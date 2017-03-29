@@ -32,8 +32,10 @@ const char *Space_Name[] = { "GR", "BS", "CS", "SKY" };
 
 #define MAX_HOST_LEN	256
 #define MAX_PORT_LEN	8
+#define MAX_DELETE_PIDS_LEN	256
 static char g_ServerHost[MAX_HOST_LEN];
 static char g_ServerPort[MAX_PORT_LEN];
+static WCHAR g_DeletePids[MAX_DELETE_PIDS_LEN];
 static int g_DecodeB25;
 static int g_Priority;
 static int g_Service_Split;
