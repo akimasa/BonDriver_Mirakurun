@@ -804,12 +804,12 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 
 	const char *type;
 	const char *channel;
-	char serviceId[6];
+	char serviceId[24];
 	if (g_Service_Split == 1) {
 		picojson::object& channel_detail = channel_obj["channel"].get<picojson::object>();
 		type = channel_detail["type"].get<std::string>().c_str();
 		channel = channel_detail["channel"].get<std::string>().c_str();
-		sprintf_s(serviceId, "%u", (DWORD)channel_obj["serviceId"].get<double>());
+		sprintf_s(serviceId, "%lld", (__int64)channel_obj["id"].get<double>());
 	}
 	else {
 		type = channel_obj["type"].get<std::string>().c_str();
@@ -837,7 +837,7 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 
 		// URL生成
 		if (g_Service_Split == 1) {
-			sprintf_s(url, "/api/channels/%s/%s/services/%s/stream?decode=%d", type, channel, serviceId, g_DecodeB25);
+			sprintf_s(url, "/api/services/%s/stream?decode=%d", serviceId, g_DecodeB25);
 		}
 		else {
 			sprintf_s(url, "/api/channels/%s/%s/stream?decode=%d", type, channel, g_DecodeB25);
